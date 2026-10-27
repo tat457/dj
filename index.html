@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIRTUAL DJ STUDIO PRO</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        rajdhani: ['Rajdhani', 'sans-serif'],
+                    },
+                    colors: {
+                        deckA: {
+                            main: '#00f3ff',
+                            glow: 'rgba(0, 243, 255, 0.4)',
+                            dark: '#003840'
+                        },
+                        deckB: {
+                            main: '#ff0055',
+                            glow: 'rgba(255, 0, 85, 0.4)',
+                            dark: '#400015'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar & visual styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        
+        .knob-container {
+            user-select: none;
+            touch-action: none;
+        }
+        
+        /* Disc vinyl effect */
+        .vinyl-grooves {
+            background: repeating-radial-gradient(
+                circle at center,
+                #111 0px,
+                #1e1e1e 2px,
+                #111 4px
+            );
+        }
+
+        /* Glassmorphism panel */
+        .dj-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Vertical range slider custom style */
+        input[type=range].vertical-slider {
+            writing-mode: bt-lr; /* IE/Edge */
+            -webkit-appearance: slider-vertical; /* WebKit */
+            width: 16px;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-rajdhani min-h-screen flex flex-col select-none overflow-x-hidden">
+
+    <!-- Global Drag & Drop Overlay -->
+    <div id="global-drop-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex-col items-center justify-center p-6 border-4 border-dashed border-cyan-500 transition-all">
+        <div class="text-center mb-8">
+            <i data-lucide="upload-cloud" class="w-16 h-16 text-cyan-400 mx-auto animate-bounce mb-3"></i>
+            <h2 class="font-orbitron font-extrabold text-2xl text-white">音源ファイルをドロップ</h2>
+            <p class="text-slate-400 text-sm mt-1">MP3, WAV, M4A, MPEG-4, AAC, FLAC などを追加できます</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-3xl h-48">
+            <div id="drop-target-deckA" class="border-2 border-cyan-500/80 bg-cyan-950/40 hover:bg-cyan-500/20 rounded-2xl flex flex-col items-center justify-center p-4 transition cursor-pointer shadow-lg shadow-cyan-950/50">
+                <i data-lucide="disc" class="w-10 h-10 text-cyan-400 mb-2"></i>
+                <span class="font-orbitron font-bold text-cyan-400">DECK A にセット</span>
+            </div>
+            <div id="drop-target-library" class="border-2 border-purple-500/80 bg-purple-950/40 hover:bg-purple-500/20 rounded-2xl flex flex-col items-center justify-center p-4 transition cursor-pointer shadow-lg shadow-purple-950/50">
+                <i data-lucide="folder-plus" class="w-10 h-10 text-purple-400 mb-2"></i>
+                <span class="font-orbitron font-bold text-purple-400">ライブラリに追加</span>
+            </div>
+            <div id="drop-target-deckB" class="border-2 border-pink-500/80 bg-pink-950/40 hover:bg-pink-500/20 rounded-2xl flex flex-col items-center justify-center p-4 transition cursor-pointer shadow-lg shadow-pink-950/50">
+                <i data-lucide="disc" class="w-10 h-10 text-pink-500 mb-2"></i>
+                <span class="font-orbitron font-bold text-pink-500">DECK B にセット</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL Input Modal -->
+    <div id="url-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-orbitron font-bold text-lg text-cyan-400 flex items-center space-x-2">
+                    <i data-lucide="link" class="w-5 h-5"></i>
+                    <span>Web上の音源URLから読込</span>
+                </h3>
+                <button id="close-url-modal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <p class="text-xs text-slate-400">MP3, WAV, M4A, AAC, MP4などのダイレクト音声URLを入力してください。</p>
+            <input type="url" id="audio-url-input" placeholder="https://example.com/audio.m4a" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+            <div class="flex space-x-2 pt-2">
+                <button id="load-url-deckA-btn" class="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs font-orbitron transition">DECK A に読込</button>
+                <button id="load-url-deckB-btn" class="flex-1 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-lg text-xs font-orbitron transition">DECK B に読込</button>
+                <button id="load-url-lib-btn" class="py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-xs font-orbitron transition">ライブラリ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mic Recording Modal -->
+    <div id="mic-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 text-center">
+            <div class="flex justify-between items-center text-left mb-2">
+                <h3 class="font-orbitron font-bold text-lg text-emerald-400 flex items-center space-x-2">
+                    <i data-lucide="mic" class="w-5 h-5"></i>
+                    <span>マイク録音サンプラー</span>
+                </h3>
+                <button id="close-mic-modal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="mic-status-text" class="text-sm font-semibold text-slate-300">マイクの録音ボタンを押してください</div>
+            <div class="py-6 flex justify-center items-center">
+                <button id="record-btn" class="w-20 h-20 rounded-full bg-red-600/20 border-2 border-red-500 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition active:scale-95 shadow-lg shadow-red-950/50">
+                    <i data-lucide="mic" class="w-8 h-8"></i>
+                </button>
+            </div>
+            <div id="record-timer" class="font-mono text-xl text-amber-400 font-bold hidden">00:00.0</div>
+            <div id="recorded-actions" class="hidden flex space-x-2 pt-2">
+                <button id="load-rec-deckA-btn" class="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs font-orbitron transition">DECK A にロード</button>
+                <button id="load-rec-deckB-btn" class="flex-1 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-lg text-xs font-orbitron transition">DECK B にロード</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Header / Bar -->
+    <header class="bg-slate-900/90 border-b border-slate-800 px-6 py-3 flex flex-wrap justify-between items-center z-20 shadow-lg gap-3">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-gradient-to-tr from-cyan-500 to-pink-500 rounded-lg shadow-md">
+                <i data-lucide="disc" class="w-6 h-6 text-slate-950 animate-spin" style="animation-duration: 8s;"></i>
+            </div>
+            <div>
+                <h1 class="font-orbitron font-extrabold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-500">
+                    VIRTUAL DJ STUDIO PRO
+                </h1>
+                <p class="text-xs text-slate-400 font-mono">HTML5 Realtime WebAudio DJ Mixer System</p>
+            </div>
+        </div>
+
+        <!-- Master Clock / Volume / Multi-source Add Buttons -->
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Add Track File Button -->
+            <label class="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition active:scale-95 shadow-md">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                <span>ファイルを追加</span>
+                <input type="file" id="global-file-input" accept="audio/*,audio/mp4,audio/x-m4a,video/mp4,.m4a,.mp4,.aac,.flac,.ogg,.wav" multiple class="hidden">
+            </label>
+
+            <!-- URL Load Button -->
+            <button id="open-url-modal-btn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold transition">
+                <i data-lucide="link" class="w-4 h-4 text-cyan-400"></i>
+                <span class="hidden sm:inline">URL指定</span>
+            </button>
+
+            <!-- Mic Sampler Button -->
+            <button id="open-mic-modal-btn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold transition">
+                <i data-lucide="mic" class="w-4 h-4 text-emerald-400"></i>
+                <span class="hidden sm:inline">録音</span>
+            </button>
+
+            <!-- Load Demo Tracks Button -->
+            <button id="load-demo-btn" class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-semibold transition active:scale-95">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">デモ音源</span>
+            </button>
+
+            <!-- Audio Context Start Notice/Status -->
+            <button id="audio-init-btn" class="flex items-center space-x-2 px-3 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 rounded-lg text-xs font-semibold">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="audio-status-text">Audio Engine Active</span>
+            </button>
+
+            <!-- Master Volume -->
+            <div class="flex items-center space-x-2 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800">
+                <i data-lucide="volume-2" class="w-4 h-4 text-slate-400"></i>
+                <span class="text-xs font-mono font-bold text-slate-300">MASTER</span>
+                <input type="range" id="master-volume" min="0" max="1" step="0.01" value="0.8" class="w-20 accent-cyan-400 cursor-pointer">
+            </div>
+        </div>
+    </header>
+
+    <!-- Main DJ Console Workspace -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 max-w-[1920px] mx-auto w-full">
+        
+        <!-- ================= DECK A (LEFT) ================= -->
+        <section class="lg:col-span-5 dj-panel rounded-2xl p-4 flex flex-col justify-between border-t-2 border-t-cyan-500 shadow-cyan-950/20 shadow-2xl relative overflow-hidden">
+            <!-- Deck Label Badge -->
+            <div class="flex justify-between items-center mb-2">
+                <div class="flex items-center space-x-2">
+                    <span class="px-2.5 py-0.5 rounded bg-cyan-500 text-slate-950 font-orbitron font-extrabold text-sm shadow-md shadow-cyan-500/30">DECK A</span>
+                    <span id="deckA-title" class="text-sm font-semibold text-slate-300 truncate max-w-[180px] sm:max-w-[260px]">曲をロードしてください</span>
+                </div>
+                <!-- Track Details -->
+                <div class="flex items-center space-x-2 font-mono text-xs">
+                    <span id="deckA-bpm-display" class="bg-slate-900 px-2 py-1 rounded text-cyan-400 font-bold border border-slate-800">BPM 0.0</span>
+                    <span id="deckA-time-display" class="bg-slate-900 px-2 py-1 rounded text-slate-300 border border-slate-800">00:00 / 00:00</span>
+                </div>
+            </div>
+
+            <!-- Waveform & Quick Upload Area -->
+            <div id="deckA-dropzone" class="relative group my-2">
+                <div class="bg-slate-950 rounded-xl p-2 border border-slate-800 relative h-24 overflow-hidden flex items-center justify-center">
+                    <canvas id="deckA-waveform" class="w-full h-full cursor-pointer rounded absolute inset-0 z-0"></canvas>
+                    <div id="deckA-playhead" class="absolute top-0 bottom-0 w-0.5 bg-cyan-400 shadow-[0_0_8px_#00f3ff] pointer-events-none z-10" style="left: 0%;"></div>
+                    <!-- Prompt Overlay -->
+                    <div id="deckA-prompt" class="relative z-20 flex flex-wrap items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm p-2 rounded-lg border border-cyan-500/30 transition duration-200">
+                        <label class="flex items-center space-x-1.5 text-cyan-400 font-semibold text-xs bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-cyan-500/40 cursor-pointer">
+                            <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+                            <span>ファイル選択</span>
+                            <input type="file" id="deckA-file-input" accept="audio/*,audio/mp4,audio/x-m4a,video/mp4,.m4a,.mp4,.aac,.flac,.ogg,.wav" class="hidden">
+                        </label>
+                        <span class="text-[10px] text-slate-500">または ドラッグ＆ドロップ (MP3/M4A/WAV等)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Jog Wheel & Performance Controls Section -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 my-2 items-center">
+                <!-- Vinyl / Jog Wheel (7 cols) -->
+                <div class="md:col-span-7 flex flex-col items-center justify-center relative">
+                    <div id="deckA-jogwheel" class="w-48 h-48 sm:w-56 sm:h-56 rounded-full vinyl-grooves border-4 border-slate-800 shadow-2xl relative flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-75">
+                        <!-- Outer Rim Indicator -->
+                        <div class="absolute inset-2 rounded-full border border-slate-700/50"></div>
+                        <!-- Deck Color Ring -->
+                        <div class="w-36 h-36 sm:w-40 sm:h-40 rounded-full border-2 border-cyan-500/30 flex items-center justify-center relative shadow-[inset_0_0_15px_rgba(0,243,255,0.2)]">
+                            <!-- Rotation Marker Line -->
+                            <div id="deckA-jog-marker" class="absolute top-2 w-1.5 h-6 bg-cyan-400 rounded-full shadow-[0_0_10px_#00f3ff]"></div>
+                            <!-- Center Label -->
+                            <div class="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center flex-col text-center p-1">
+                                <span class="font-orbitron text-[10px] text-cyan-400 font-bold">DECK A</span>
+                                <i data-lucide="disc-3" class="w-5 h-5 text-slate-500 mt-0.5"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] text-slate-500 font-mono mt-1">DRAG TO SCRATCH / BEND</span>
+                </div>
+
+                <!-- Pitch Slider & Deck Options (5 cols) -->
+                <div class="md:col-span-5 flex flex-col justify-between h-full bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-slate-400">PITCH / TEMPO</span>
+                        <span id="deckA-pitch-val" class="text-xs font-mono text-cyan-400 font-bold">+0.0%</span>
+                    </div>
+                    <!-- Pitch Slider -->
+                    <div class="flex items-center justify-center h-32 my-1">
+                        <input type="range" id="deckA-pitch-slider" min="-16" max="16" step="0.1" value="0" class="vertical-slider accent-cyan-400 cursor-pointer">
+                    </div>
+                    <button id="deckA-pitch-reset" class="mt-2 py-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono transition">
+                        RESET PITCH
+                    </button>
+                </div>
+            </div>
+
+            <!-- Deck Performance Pads (Hot Cues & Loops) -->
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-semibold mb-1">
+                    <span>HOT CUES</span>
+                    <span class="text-[10px] text-slate-500">(Shift/Right-Click Clear)</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <button id="deckA-cue-1" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-cyan-400 hover:text-cyan-400 transition">CUE 1</button>
+                    <button id="deckA-cue-2" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-cyan-400 hover:text-cyan-400 transition">CUE 2</button>
+                    <button id="deckA-cue-3" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-cyan-400 hover:text-cyan-400 transition">CUE 3</button>
+                    <button id="deckA-cue-4" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-cyan-400 hover:text-cyan-400 transition">CUE 4</button>
+                </div>
+
+                <div class="flex justify-between items-center text-xs text-slate-400 font-semibold pt-1">
+                    <span>AUTO LOOP</span>
+                    <button id="deckA-loop-exit" class="text-[10px] px-2 py-0.5 bg-red-950/60 text-red-400 border border-red-800/50 rounded hidden">EXIT LOOP</button>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <button id="deckA-loop-1" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-cyan-500">1 Beat</button>
+                    <button id="deckA-loop-2" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-cyan-500">2 Beats</button>
+                    <button id="deckA-loop-4" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-cyan-500">4 Beats</button>
+                    <button id="deckA-loop-8" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-cyan-500">8 Beats</button>
+                </div>
+            </div>
+
+            <!-- Transport Main Buttons (Play/Pause, Cue, Sync) -->
+            <div class="grid grid-cols-3 gap-3 mt-3">
+                <button id="deckA-cue-btn" class="py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-xl font-orbitron font-bold text-sm tracking-wider flex items-center justify-center space-x-1 active:scale-95 transition shadow-lg">
+                    <span>CUE</span>
+                </button>
+                <button id="deckA-play-btn" class="py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/60 rounded-xl font-orbitron font-bold text-sm tracking-wider flex items-center justify-center space-x-2 active:scale-95 transition shadow-lg shadow-cyan-950/50">
+                    <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+                    <span>PLAY</span>
+                </button>
+                <button id="deckA-sync-btn" class="py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl font-orbitron font-bold text-xs tracking-wider flex items-center justify-center active:scale-95 transition">
+                    <span>SYNC</span>
+                </button>
+            </div>
+        </section>
+
+
+        <!-- ================= CENTER MIXER (2 COLS) ================= -->
+        <section class="lg:col-span-2 dj-panel rounded-2xl p-4 flex flex-col justify-between border-t-2 border-t-purple-500 shadow-2xl">
+            <div class="text-center pb-2 border-b border-slate-800">
+                <h2 class="font-orbitron font-bold text-xs tracking-widest text-slate-400">DJ MIXER</h2>
+            </div>
+
+            <!-- EQ & Filter Controls Matrix -->
+            <div class="space-y-3 my-2">
+                
+                <!-- Deck A vs Deck B Gain & Trim -->
+                <div class="grid grid-cols-2 gap-3 text-center">
+                    <div>
+                        <span class="text-[10px] font-mono text-cyan-400 font-bold block mb-1">TRIM A</span>
+                        <input type="range" id="deckA-trim" min="0" max="1.5" step="0.01" value="1" class="w-full accent-cyan-400 cursor-pointer">
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-mono text-pink-500 font-bold block mb-1">TRIM B</span>
+                        <input type="range" id="deckB-trim" min="0" max="1.5" step="0.01" value="1" class="w-full accent-pink-500 cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- 3 BAND EQ (HI / MID / LOW) -->
+                <!-- High EQ -->
+                <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 font-bold block text-center">HI EQ (10kHz)</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="range" id="deckA-eq-hi" min="-24" max="6" step="0.5" value="0" class="w-full accent-cyan-400">
+                        <input type="range" id="deckB-eq-hi" min="-24" max="6" step="0.5" value="0" class="w-full accent-pink-500">
+                    </div>
+                </div>
+
+                <!-- Mid EQ -->
+                <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 font-bold block text-center">MID EQ (2.5kHz)</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="range" id="deckA-eq-mid" min="-24" max="6" step="0.5" value="0" class="w-full accent-cyan-400">
+                        <input type="range" id="deckB-eq-mid" min="-24" max="6" step="0.5" value="0" class="w-full accent-pink-500">
+                    </div>
+                </div>
+
+                <!-- Low EQ -->
+                <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 font-bold block text-center">LOW EQ (250Hz)</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="range" id="deckA-eq-low" min="-24" max="6" step="0.5" value="0" class="w-full accent-cyan-400">
+                        <input type="range" id="deckB-eq-low" min="-24" max="6" step="0.5" value="0" class="w-full accent-pink-500">
+                    </div>
+                </div>
+
+                <!-- DJ COLOR FILTER (LPF <-> HPF) -->
+                <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
+                    <div class="flex justify-between text-[10px] font-mono text-slate-400 font-bold">
+                        <span>FILTER A</span>
+                        <span>FILTER B</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="range" id="deckA-filter" min="-1" max="1" step="0.01" value="0" class="w-full accent-cyan-400">
+                        <input type="range" id="deckB-filter" min="-1" max="1" step="0.01" value="0" class="w-full accent-pink-500">
+                    </div>
+                </div>
+
+                <!-- FX Delay Toggle Buttons -->
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button id="deckA-fx-delay" class="py-1 px-2 rounded text-[10px] font-mono font-bold bg-slate-900 border border-slate-700 text-slate-400 hover:text-cyan-400 transition">
+                        DELAY FX A
+                    </button>
+                    <button id="deckB-fx-delay" class="py-1 px-2 rounded text-[10px] font-mono font-bold bg-slate-900 border border-slate-700 text-slate-400 hover:text-pink-400 transition">
+                        DELAY FX B
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Volume Faders & Level VU Meters -->
+            <div class="my-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="flex justify-around items-center h-36 relative">
+                    <!-- Deck A Volume Fader -->
+                    <div class="flex flex-col items-center h-full space-y-1">
+                        <span class="text-[10px] font-mono text-cyan-400 font-bold">VOL A</span>
+                        <input type="range" id="deckA-volume" min="0" max="1" step="0.01" value="0.9" class="vertical-slider accent-cyan-400 cursor-pointer">
+                    </div>
+
+                    <!-- VU Level Meters -->
+                    <div class="flex space-x-2 h-full items-end bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">
+                        <!-- Meter A -->
+                        <div class="w-2.5 h-full bg-slate-950 rounded relative overflow-hidden flex flex-col justify-end">
+                            <div id="meter-a-fill" class="w-full bg-gradient-to-t from-emerald-500 via-amber-400 to-red-500 rounded-t transition-all duration-75" style="height: 0%;"></div>
+                        </div>
+                        <!-- Meter B -->
+                        <div class="w-2.5 h-full bg-slate-950 rounded relative overflow-hidden flex flex-col justify-end">
+                            <div id="meter-b-fill" class="w-full bg-gradient-to-t from-emerald-500 via-amber-400 to-red-500 rounded-t transition-all duration-75" style="height: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Deck B Volume Fader -->
+                    <div class="flex flex-col items-center h-full space-y-1">
+                        <span class="text-[10px] font-mono text-pink-500 font-bold">VOL B</span>
+                        <input type="range" id="deckB-volume" min="0" max="1" step="0.01" value="0.9" class="vertical-slider accent-pink-500 cursor-pointer">
+                    </div>
+                </div>
+            </div>
+
+            <!-- CROSSFADER SECTION -->
+            <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                <div class="flex justify-between items-center text-[10px] font-mono text-slate-400 font-bold mb-1">
+                    <span class="text-cyan-400">DECK A</span>
+                    <span>CROSSFADER</span>
+                    <span class="text-pink-500">DECK B</span>
+                </div>
+                <input type="range" id="crossfader" min="-1" max="1" step="0.01" value="0" class="w-full accent-purple-500 cursor-pointer h-3 bg-slate-900 rounded-lg">
+            </div>
+        </section>
+
+
+        <!-- ================= DECK B (RIGHT) ================= -->
+        <section class="lg:col-span-5 dj-panel rounded-2xl p-4 flex flex-col justify-between border-t-2 border-t-pink-500 shadow-pink-950/20 shadow-2xl relative overflow-hidden">
+            <!-- Deck Label Badge -->
+            <div class="flex justify-between items-center mb-2">
+                <!-- Track Details -->
+                <div class="flex items-center space-x-2 font-mono text-xs order-2 sm:order-1">
+                    <span id="deckB-bpm-display" class="bg-slate-900 px-2 py-1 rounded text-pink-500 font-bold border border-slate-800">BPM 0.0</span>
+                    <span id="deckB-time-display" class="bg-slate-900 px-2 py-1 rounded text-slate-300 border border-slate-800">00:00 / 00:00</span>
+                </div>
+                <div class="flex items-center space-x-2 order-1 sm:order-2">
+                    <span id="deckB-title" class="text-sm font-semibold text-slate-300 truncate max-w-[180px] sm:max-w-[260px]">曲をロードしてください</span>
+                    <span class="px-2.5 py-0.5 rounded bg-pink-500 text-slate-950 font-orbitron font-extrabold text-sm shadow-md shadow-pink-500/30">DECK B</span>
+                </div>
+            </div>
+
+            <!-- Waveform & Quick Upload Area -->
+            <div id="deckB-dropzone" class="relative group my-2">
+                <div class="bg-slate-950 rounded-xl p-2 border border-slate-800 relative h-24 overflow-hidden flex items-center justify-center">
+                    <canvas id="deckB-waveform" class="w-full h-full cursor-pointer rounded absolute inset-0 z-0"></canvas>
+                    <div id="deckB-playhead" class="absolute top-0 bottom-0 w-0.5 bg-pink-500 shadow-[0_0_8px_#ff0055] pointer-events-none z-10" style="left: 0%;"></div>
+                    <!-- Prompt Overlay -->
+                    <div id="deckB-prompt" class="relative z-20 flex flex-wrap items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm p-2 rounded-lg border border-pink-500/30 transition duration-200">
+                        <label class="flex items-center space-x-1.5 text-pink-500 font-semibold text-xs bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-pink-500/40 cursor-pointer">
+                            <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+                            <span>ファイル選択</span>
+                            <input type="file" id="deckB-file-input" accept="audio/*,audio/mp4,audio/x-m4a,video/mp4,.m4a,.mp4,.aac,.flac,.ogg,.wav" class="hidden">
+                        </label>
+                        <span class="text-[10px] text-slate-500">または ドラッグ＆ドロップ (MP3/M4A/WAV等)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Jog Wheel & Performance Controls Section -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 my-2 items-center">
+                <!-- Pitch Slider & Deck Options (5 cols) -->
+                <div class="md:col-span-5 flex flex-col justify-between h-full bg-slate-950/40 p-3 rounded-xl border border-slate-800/80 order-2 md:order-1">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-slate-400">PITCH / TEMPO</span>
+                        <span id="deckB-pitch-val" class="text-xs font-mono text-pink-500 font-bold">+0.0%</span>
+                    </div>
+                    <!-- Pitch Slider -->
+                    <div class="flex items-center justify-center h-32 my-1">
+                        <input type="range" id="deckB-pitch-slider" min="-16" max="16" step="0.1" value="0" class="vertical-slider accent-pink-500 cursor-pointer">
+                    </div>
+                    <button id="deckB-pitch-reset" class="mt-2 py-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono transition">
+                        RESET PITCH
+                    </button>
+                </div>
+
+                <!-- Vinyl / Jog Wheel (7 cols) -->
+                <div class="md:col-span-7 flex flex-col items-center justify-center relative order-1 md:order-2">
+                    <div id="deckB-jogwheel" class="w-48 h-48 sm:w-56 sm:h-56 rounded-full vinyl-grooves border-4 border-slate-800 shadow-2xl relative flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-75">
+                        <!-- Outer Rim Indicator -->
+                        <div class="absolute inset-2 rounded-full border border-slate-700/50"></div>
+                        <!-- Deck Color Ring -->
+                        <div class="w-36 h-36 sm:w-40 sm:h-40 rounded-full border-2 border-pink-500/30 flex items-center justify-center relative shadow-[inset_0_0_15px_rgba(255,0,85,0.2)]">
+                            <!-- Rotation Marker Line -->
+                            <div id="deckB-jog-marker" class="absolute top-2 w-1.5 h-6 bg-pink-500 rounded-full shadow-[0_0_10px_#ff0055]"></div>
+                            <!-- Center Label -->
+                            <div class="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center flex-col text-center p-1">
+                                <span class="font-orbitron text-[10px] text-pink-500 font-bold">DECK B</span>
+                                <i data-lucide="disc-3" class="w-5 h-5 text-slate-500 mt-0.5"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] text-slate-500 font-mono mt-1">DRAG TO SCRATCH / BEND</span>
+                </div>
+            </div>
+
+            <!-- Deck Performance Pads (Hot Cues & Loops) -->
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-semibold mb-1">
+                    <span>HOT CUES</span>
+                    <span class="text-[10px] text-slate-500">(Shift/Right-Click Clear)</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <button id="deckB-cue-1" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-pink-500 hover:text-pink-500 transition">CUE 1</button>
+                    <button id="deckB-cue-2" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-pink-500 hover:text-pink-500 transition">CUE 2</button>
+                    <button id="deckB-cue-3" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-pink-500 hover:text-pink-500 transition">CUE 3</button>
+                    <button id="deckB-cue-4" class="py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-pink-500 hover:text-pink-500 transition">CUE 4</button>
+                </div>
+
+                <div class="flex justify-between items-center text-xs text-slate-400 font-semibold pt-1">
+                    <span>AUTO LOOP</span>
+                    <button id="deckB-loop-exit" class="text-[10px] px-2 py-0.5 bg-red-950/60 text-red-400 border border-red-800/50 rounded hidden">EXIT LOOP</button>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <button id="deckB-loop-1" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-pink-500">1 Beat</button>
+                    <button id="deckB-loop-2" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-pink-500">2 Beats</button>
+                    <button id="deckB-loop-4" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-pink-500">4 Beats</button>
+                    <button id="deckB-loop-8" class="py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 hover:border-pink-500">8 Beats</button>
+                </div>
+            </div>
+
+            <!-- Transport Main Buttons (Play/Pause, Cue, Sync) -->
+            <div class="grid grid-cols-3 gap-3 mt-3">
+                <button id="deckB-cue-btn" class="py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-xl font-orbitron font-bold text-sm tracking-wider flex items-center justify-center space-x-1 active:scale-95 transition shadow-lg">
+                    <span>CUE</span>
+                </button>
+                <button id="deckB-play-btn" class="py-3 bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 border border-pink-500/60 rounded-xl font-orbitron font-bold text-sm tracking-wider flex items-center justify-center space-x-2 active:scale-95 transition shadow-lg shadow-pink-950/50">
+                    <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+                    <span>PLAY</span>
+                </button>
+                <button id="deckB-sync-btn" class="py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl font-orbitron font-bold text-xs tracking-wider flex items-center justify-center active:scale-95 transition">
+                    <span>SYNC</span>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- TRACK LIBRARY PANEL -->
+    <section class="max-w-[1920px] mx-auto w-full px-4 mb-4">
+        <div class="dj-panel rounded-2xl p-4 border-t-2 border-t-purple-500 shadow-2xl">
+            <div class="flex flex-wrap justify-between items-center mb-3 pb-2 border-b border-slate-800 gap-2">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="library" class="w-5 h-5 text-purple-400"></i>
+                    <h2 class="font-orbitron font-bold text-sm tracking-wider text-slate-200">TRACK LIBRARY & SOUND POOL</h2>
+                    <span id="library-count-badge" class="px-2 py-0.5 bg-purple-950 text-purple-300 rounded-full text-[10px] font-mono border border-purple-800">0 トラック</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label class="flex items-center space-x-1 px-3 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 rounded-lg text-xs font-semibold cursor-pointer transition">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span>音源を追加</span>
+                        <input type="file" id="library-file-input" accept="audio/*,audio/mp4,audio/x-m4a,video/mp4,.m4a,.mp4,.aac,.flac,.ogg,.wav" multiple class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Library Track List -->
+            <div id="library-track-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <div id="library-empty-notice" class="text-center py-6 text-slate-500 text-xs font-mono">
+                    音源ファイル（MP3, WAV, M4A/MPEG-4, AAC, FLAC, OGG等）をドラッグ＆ドロップするか、「音源を追加」から選択できます。
+                </div>
+            </div>
+
+            <!-- Library Track List -->
+            <div id="library-track-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <div id="library-empty-notice" class="text-center py-6 text-slate-500 text-xs font-mono">
+                    音源ファイル（MP3, WAV, OGGなど）を画面全体にドラッグ＆ドロップするか、「音源を追加」で保存できます。
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AUDIO CORE SYSTEM ENGINE JS -->
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Audio Context Engine Initialization
+        let audioCtx = null;
+        let masterGainNode = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                masterGainNode = audioCtx.createGain();
+                masterGainNode.gain.value = 0.8;
+                masterGainNode.connect(audioCtx.destination);
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        // Track Library State Management
+        const trackLibrary = [];
+
+        function addTrackToLibrary(audioBuffer, name, sourceInfo = 'Local File') {
+            const track = {
+                id: 'trk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                name: name,
+                buffer: audioBuffer,
+                duration: audioBuffer.duration,
+                source: sourceInfo,
+                bpm: 120
+            };
+            trackLibrary.push(track);
+            renderTrackLibrary();
+            return track;
+        }
+
+        function renderTrackLibrary() {
+            const listEl = document.getElementById('library-track-list');
+            const countEl = document.getElementById('library-count-badge');
+            const emptyEl = document.getElementById('library-empty-notice');
+
+            countEl.textContent = `${trackLibrary.length} トラック`;
+
+            if (trackLibrary.length === 0) {
+                if (emptyEl) emptyEl.style.display = 'block';
+                return;
+            }
+
+            if (emptyEl) emptyEl.style.display = 'none';
+
+            const items = listEl.querySelectorAll('.library-item');
+            items.forEach(el => el.remove());
+
+            trackLibrary.forEach((track) => {
+                const durMin = Math.floor(track.duration / 60).toString().padStart(2, '0');
+                const durSec = Math.floor(track.duration % 60).toString().padStart(2, '0');
+
+                const row = document.createElement('div');
+                row.className = 'library-item flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-xs transition';
+                row.innerHTML = `
+                    <div class="flex items-center space-x-3 overflow-hidden mr-2">
+                        <i data-lucide="music" class="w-4 h-4 text-purple-400 flex-shrink-0"></i>
+                        <div class="truncate">
+                            <span class="font-semibold text-slate-200 block truncate">${track.name}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">${track.source} • ${durMin}:${durSec}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 flex-shrink-0">
+                        <button class="load-a-btn px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 border border-cyan-700/50 rounded-md font-orbitron font-bold text-[10px] transition">
+                            LOAD A
+                        </button>
+                        <button class="load-b-btn px-2.5 py-1 bg-pink-950 hover:bg-pink-900 text-pink-400 border border-pink-700/50 rounded-md font-orbitron font-bold text-[10px] transition">
+                            LOAD B
+                        </button>
+                    </div>
+                `;
+
+                row.querySelector('.load-a-btn').addEventListener('click', () => {
+                    deckA.loadBufferDirectly(track.buffer, track.name, track.bpm);
+                });
+
+                row.querySelector('.load-b-btn').addEventListener('click', () => {
+                    deckB.loadBufferDirectly(track.buffer, track.name, track.bpm);
+                });
+
+                listEl.appendChild(row);
+            });
+
+            lucide.createIcons();
+        }
+
+        // DJ Deck Controller Class
+        class DJDeck {
+            constructor(id, colorHex, accentClass) {
+                this.id = id; // 'deckA' or 'deckB'
+                this.colorHex = colorHex;
+                this.accentClass = accentClass;
+
+                // Audio State
+                this.audioBuffer = null;
+                this.sourceNode = null;
+                this.isPlaying = false;
+                this.startTime = 0;       // AudioCtx start time offset
+                this.pauseOffset = 0;     // Current track position in seconds
+                this.playbackRate = 1.0;
+                this.pitchPercent = 0;
+                this.bpm = 120;
+                this.detectedBpm = 120;
+
+                // Loop State
+                this.loopActive = false;
+                this.loopStart = 0;
+                this.loopEnd = 0;
+
+                // Hot Cues
+                this.hotCues = [null, null, null, null];
+
+                // Sound Effect Toggle
+                this.delayActive = false;
+
+                // Audio Nodes Setup
+                this.initNodes();
+
+                // DOM Elements
+                this.bindElements();
+
+                // Setup Listeners
+                this.setupEventListeners();
+
+                // Jogwheel Drag Variables
+                this.isScratching = false;
+                this.lastMouseX = 0;
+                this.jogAngle = 0;
+
+                // Animation loop
+                this.animate();
+            }
+
+            initNodes() {
+                const ctx = getAudioContext();
+
+                // Filter & EQ Nodes
+                this.filterNode = ctx.createBiquadFilter();
+                this.filterNode.type = 'allpass';
+
+                this.eqLowNode = ctx.createBiquadFilter();
+                this.eqLowNode.type = 'lowshelf';
+                this.eqLowNode.frequency.value = 250;
+
+                this.eqMidNode = ctx.createBiquadFilter();
+                this.eqMidNode.type = 'peaking';
+                this.eqMidNode.frequency.value = 2500;
+                this.eqMidNode.Q.value = 1.0;
+
+                this.eqHighNode = ctx.createBiquadFilter();
+                this.eqHighNode.type = 'highshelf';
+                this.eqHighNode.frequency.value = 10000;
+
+                this.trimGainNode = ctx.createGain();
+                this.trimGainNode.gain.value = 1.0;
+
+                // Delay FX
+                this.delayNode = ctx.createDelay();
+                this.delayNode.delayTime.value = 0.375;
+                this.delayFeedbackNode = ctx.createGain();
+                this.delayFeedbackNode.gain.value = 0.4;
+                this.delayGainNode = ctx.createGain();
+                this.delayGainNode.gain.value = 0;
+
+                this.delayNode.connect(this.delayFeedbackNode);
+                this.delayFeedbackNode.connect(this.delayNode);
+
+                // Deck Main Volume
+                this.deckGainNode = ctx.createGain();
+                this.deckGainNode.gain.value = 0.9;
+
+                // Crossfader Volume
+                this.crossfaderGainNode = ctx.createGain();
+                this.crossfaderGainNode.gain.value = 1.0;
+
+                // Analyser for Level VU Meter
+                this.analyserNode = ctx.createAnalyser();
+                this.analyserNode.fftSize = 64;
+
+                // Chain Connections
+                this.filterNode.connect(this.eqLowNode);
+                this.eqLowNode.connect(this.eqMidNode);
+                this.eqMidNode.connect(this.eqHighNode);
+                this.eqHighNode.connect(this.trimGainNode);
+
+                // Main Dry Path
+                this.trimGainNode.connect(this.deckGainNode);
+
+                // Wet Delay Path
+                this.trimGainNode.connect(this.delayNode);
+                this.delayNode.connect(this.delayGainNode);
+                this.delayGainNode.connect(this.deckGainNode);
+
+                this.deckGainNode.connect(this.crossfaderGainNode);
+                this.crossfaderGainNode.connect(this.analyserNode);
+                this.analyserNode.connect(masterGainNode);
+            }
+
+            bindElements() {
+                const id = this.id;
+                this.titleEl = document.getElementById(`${id}-title`);
+                this.bpmDisplayEl = document.getElementById(`${id}-bpm-display`);
+                this.timeDisplayEl = document.getElementById(`${id}-time-display`);
+                this.waveformCanvas = document.getElementById(`${id}-waveform`);
+                this.playheadEl = document.getElementById(`${id}-playhead`);
+                this.promptEl = document.getElementById(`${id}-prompt`);
+                this.fileInput = document.getElementById(`${id}-file-input`);
+                this.dropzone = document.getElementById(`${id}-dropzone`);
+                this.jogwheelEl = document.getElementById(`${id}-jogwheel`);
+                this.jogMarkerEl = document.getElementById(`${id}-jog-marker`);
+                this.playBtn = document.getElementById(`${id}-play-btn`);
+                this.cueBtn = document.getElementById(`${id}-cue-btn`);
+                this.syncBtn = document.getElementById(`${id}-sync-btn`);
+                this.pitchSlider = document.getElementById(`${id}-pitch-slider`);
+                this.pitchValEl = document.getElementById(`${id}-pitch-val`);
+                this.pitchResetBtn = document.getElementById(`${id}-pitch-reset`);
+                
+                // Mixer Controls
+                this.trimSlider = document.getElementById(`${id}-trim`);
+                this.eqHiSlider = document.getElementById(`${id}-eq-hi`);
+                this.eqMidSlider = document.getElementById(`${id}-eq-mid`);
+                this.eqLowSlider = document.getElementById(`${id}-eq-low`);
+                this.filterSlider = document.getElementById(`${id}-filter`);
+                this.volSlider = document.getElementById(`${id}-volume`);
+                this.delayBtn = document.getElementById(`${id}-fx-delay`);
+                this.meterFill = document.getElementById(`meter-${id === 'deckA' ? 'a' : 'b'}-fill`);
+
+                // Hot Cue Buttons
+                this.cueBtns = [1, 2, 3, 4].map(n => document.getElementById(`${id}-cue-${n}`));
+
+                // Loop Buttons
+                this.loopBtns = [1, 2, 4, 8].map(n => document.getElementById(`${id}-loop-${n}`));
+                this.loopExitBtn = document.getElementById(`${id}-loop-exit`);
+
+                this.ctx2d = this.waveformCanvas.getContext('2d');
+            }
+
+            setupEventListeners() {
+                // Audio File Loading
+                this.fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) this.loadAudioFile(file);
+                });
+
+                // Play / Pause
+                this.playBtn.addEventListener('click', () => {
+                    getAudioContext();
+                    this.togglePlay();
+                });
+
+                // Cue Button
+                this.cueBtn.addEventListener('click', () => {
+                    getAudioContext();
+                    this.handleCue();
+                });
+
+                // Waveform Seek
+                this.waveformCanvas.addEventListener('click', (e) => {
+                    if (!this.audioBuffer) return;
+                    const rect = this.waveformCanvas.getBoundingClientRect();
+                    const ratio = (e.clientX - rect.left) / rect.width;
+                    this.seekTo(ratio * this.audioBuffer.duration);
+                });
+
+                // Pitch Slider
+                this.pitchSlider.addEventListener('input', (e) => {
+                    this.pitchPercent = parseFloat(e.target.value);
+                    this.pitchValEl.textContent = `${this.pitchPercent >= 0 ? '+' : ''}${this.pitchPercent.toFixed(1)}%`;
+                    this.updatePlaybackRate();
+                });
+
+                this.pitchResetBtn.addEventListener('click', () => {
+                    this.pitchSlider.value = 0;
+                    this.pitchPercent = 0;
+                    this.pitchValEl.textContent = '+0.0%';
+                    this.updatePlaybackRate();
+                });
+
+                // Mixer Controls
+                this.trimSlider.addEventListener('input', (e) => {
+                    this.trimGainNode.gain.value = parseFloat(e.target.value);
+                });
+
+                this.eqHiSlider.addEventListener('input', (e) => {
+                    this.eqHighNode.gain.value = parseFloat(e.target.value);
+                });
+
+                this.eqMidSlider.addEventListener('input', (e) => {
+                    this.eqMidNode.gain.value = parseFloat(e.target.value);
+                });
+
+                this.eqLowSlider.addEventListener('input', (e) => {
+                    this.eqLowNode.gain.value = parseFloat(e.target.value);
+                });
+
+                this.filterSlider.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    if (val === 0) {
+                        this.filterNode.type = 'allpass';
+                    } else if (val < 0) {
+                        this.filterNode.type = 'lowpass';
+                        this.filterNode.frequency.value = 200 + Math.pow(1 + val, 2) * 19800;
+                    } else {
+                        this.filterNode.type = 'highpass';
+                        this.filterNode.frequency.value = 20 + Math.pow(val, 2) * 7980;
+                    }
+                });
+
+                this.volSlider.addEventListener('input', (e) => {
+                    this.deckGainNode.gain.value = parseFloat(e.target.value);
+                });
+
+                // Delay FX Button
+                this.delayBtn.addEventListener('click', () => {
+                    this.delayActive = !this.delayActive;
+                    this.delayGainNode.gain.value = this.delayActive ? 0.5 : 0;
+                    this.delayBtn.classList.toggle('bg-cyan-500/30', this.delayActive && this.id === 'deckA');
+                    this.delayBtn.classList.toggle('text-cyan-400', this.delayActive && this.id === 'deckA');
+                    this.delayBtn.classList.toggle('bg-pink-500/30', this.delayActive && this.id === 'deckB');
+                    this.delayBtn.classList.toggle('text-pink-500', this.delayActive && this.id === 'deckB');
+                });
+
+                // Hot Cue Buttons
+                this.cueBtns.forEach((btn, index) => {
+                    btn.addEventListener('click', (e) => {
+                        if (e.shiftKey) {
+                            this.clearHotCue(index);
+                        } else {
+                            this.triggerHotCue(index);
+                        }
+                    });
+                    btn.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        this.clearHotCue(index);
+                    });
+                });
+
+                // Auto Loop Buttons
+                const beatsMap = [1, 2, 4, 8];
+                this.loopBtns.forEach((btn, i) => {
+                    btn.addEventListener('click', () => {
+                        this.setLoop(beatsMap[i]);
+                    });
+                });
+
+                this.loopExitBtn.addEventListener('click', () => {
+                    this.clearLoop();
+                });
+
+                // Scratching / Jogwheel interaction
+                this.setupJogWheelScratch();
+            }
+
+            setupJogWheelScratch() {
+                const jog = this.jogwheelEl;
+
+                const startScratch = (clientX) => {
+                    if (!this.audioBuffer) return;
+                    this.isScratching = true;
+                    this.lastMouseX = clientX;
+                };
+
+                const moveScratch = (clientX) => {
+                    if (!this.isScratching || !this.audioBuffer) return;
+                    const deltaX = clientX - this.lastMouseX;
+                    this.lastMouseX = clientX;
+
+                    const scratchAmount = (deltaX / 200) * (this.playbackRate || 1.0);
+                    let newTime = this.getCurrentTime() + scratchAmount;
+                    newTime = Math.max(0, Math.min(newTime, this.audioBuffer.duration));
+
+                    this.jogAngle += deltaX * 2;
+                    this.jogMarkerEl.style.transform = `rotate(${this.jogAngle}deg)`;
+
+                    if (this.isPlaying) {
+                        this.seekTo(newTime, true);
+                    } else {
+                        this.pauseOffset = newTime;
+                    }
+                };
+
+                const stopScratch = () => {
+                    this.isScratching = false;
+                };
+
+                jog.addEventListener('mousedown', (e) => startScratch(e.clientX));
+                window.addEventListener('mousemove', (e) => moveScratch(e.clientX));
+                window.addEventListener('mouseup', stopScratch);
+
+                jog.addEventListener('touchstart', (e) => startScratch(e.touches[0].clientX));
+                window.addEventListener('touchmove', (e) => {
+                    if (this.isScratching) moveScratch(e.touches[0].clientX);
+                });
+                window.addEventListener('touchend', stopScratch);
+            }
+
+            loadAudioFile(file) {
+                this.titleEl.textContent = '読み込み中...';
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                    const ctx = getAudioContext();
+                    ctx.decodeAudioData(e.target.result)
+                        .then((buffer) => {
+                            this.loadBufferDirectly(buffer, file.name);
+                            addTrackToLibrary(buffer, file.name, 'File Upload');
+                        })
+                        .catch((err) => {
+                            console.error('Audio decode error:', err);
+                            this.titleEl.textContent = 'エラー: デコード失敗';
+                            const notification = document.createElement('div');
+                            notification.className = 'fixed bottom-4 right-4 z-50 bg-red-950 text-red-200 text-xs px-4 py-3 rounded-xl border border-red-700 shadow-xl max-w-sm';
+                            notification.textContent = '音声ファイルのデコードに失敗しました。Apple Music等のDRM保護（Apple Digital Rights Management）付きM4Aファイルや非対応コーデックの可能性があります。';
+                            document.body.appendChild(notification);
+                            setTimeout(() => notification.remove(), 7000);
+                        });
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            loadBufferDirectly(buffer, name, bpm = 120) {
+                this.audioBuffer = buffer;
+                this.titleEl.textContent = name;
+                this.bpm = bpm;
+                this.detectedBpm = bpm;
+                this.bpmDisplayEl.textContent = `BPM ${bpm.toFixed(1)}`;
+                this.pauseOffset = 0;
+                if (this.promptEl) this.promptEl.classList.add('opacity-0', 'pointer-events-none');
+                this.drawWaveform();
+                this.updateTimeDisplay();
+            }
+
+            getCurrentTime() {
+                if (!this.isPlaying) return this.pauseOffset;
+                const ctx = getAudioContext();
+                const elapsed = (ctx.currentTime - this.startTime) * this.playbackRate;
+                return this.pauseOffset + elapsed;
+            }
+
+            updatePlaybackRate() {
+                this.playbackRate = 1.0 + (this.pitchPercent / 100);
+                if (this.sourceNode) {
+                    this.sourceNode.playbackRate.value = this.playbackRate;
+                }
+                this.bpmDisplayEl.textContent = `BPM ${(this.bpm * this.playbackRate).toFixed(1)}`;
+            }
+
+            togglePlay() {
+                if (!this.audioBuffer) return;
+                if (this.isPlaying) {
+                    this.pause();
+                } else {
+                    this.play();
+                }
+            }
+
+            play() {
+                if (!this.audioBuffer || this.isPlaying) return;
+                const ctx = getAudioContext();
+
+                if (this.pauseOffset >= this.audioBuffer.duration) {
+                    this.pauseOffset = 0;
+                }
+
+                this.sourceNode = ctx.createBufferSource();
+                this.sourceNode.buffer = this.audioBuffer;
+                this.sourceNode.playbackRate.value = this.playbackRate;
+                this.sourceNode.connect(this.filterNode);
+
+                this.startTime = ctx.currentTime;
+                this.sourceNode.start(0, this.pauseOffset);
+                this.isPlaying = true;
+
+                this.playBtn.classList.add('bg-emerald-500/30', 'border-emerald-500');
+                this.playBtn.innerHTML = `<i data-lucide="pause" class="w-5 h-5 fill-current"></i><span>PAUSE</span>`;
+                lucide.createIcons();
+            }
+
+            pause() {
+                if (!this.isPlaying) return;
+                this.pauseOffset = this.getCurrentTime();
+                this.stopSource();
+                this.isPlaying = false;
+
+                this.playBtn.classList.remove('bg-emerald-500/30', 'border-emerald-500');
+                this.playBtn.innerHTML = `<i data-lucide="play" class="w-5 h-5 fill-current"></i><span>PLAY</span>`;
+                lucide.createIcons();
+            }
+
+            stopSource() {
+                if (this.sourceNode) {
+                    try {
+                        this.sourceNode.stop();
+                        this.sourceNode.disconnect();
+                    } catch (e) {}
+                    this.sourceNode = null;
+                }
+            }
+
+            stop() {
+                this.pause();
+                this.pauseOffset = 0;
+                this.updatePlayhead();
+            }
+
+            handleCue() {
+                if (!this.audioBuffer) return;
+                if (this.isPlaying) {
+                    this.pause();
+                    this.pauseOffset = 0;
+                } else {
+                    this.pauseOffset = 0;
+                    this.play();
+                }
+            }
+
+            seekTo(timeInSeconds, preservePlayState = false) {
+                if (!this.audioBuffer) return;
+                const wasPlaying = this.isPlaying;
+                if (wasPlaying) this.stopSource();
+
+                this.pauseOffset = Math.max(0, Math.min(timeInSeconds, this.audioBuffer.duration));
+
+                if (wasPlaying || preservePlayState) {
+                    this.isPlaying = false;
+                    this.play();
+                } else {
+                    this.updatePlayhead();
+                }
+            }
+
+            // Hot Cue Logic
+            triggerHotCue(index) {
+                if (!this.audioBuffer) return;
+                const cueTime = this.hotCues[index];
+                if (cueTime !== null) {
+                    this.seekTo(cueTime, true);
+                } else {
+                    this.hotCues[index] = this.getCurrentTime();
+                    this.cueBtns[index].classList.add('bg-cyan-500/20', 'text-cyan-400', 'border-cyan-400');
+                    if (this.id === 'deckB') {
+                        this.cueBtns[index].classList.replace('bg-cyan-500/20', 'bg-pink-500/20');
+                        this.cueBtns[index].classList.replace('text-cyan-400', 'text-pink-500');
+                        this.cueBtns[index].classList.replace('border-cyan-400', 'border-pink-500');
+                    }
+                }
+            }
+
+            clearHotCue(index) {
+                this.hotCues[index] = null;
+                this.cueBtns[index].className = `py-2 rounded bg-slate-900 border border-slate-700 text-xs font-bold font-mono text-slate-400 hover:border-${this.id === 'deckA' ? 'cyan-400' : 'pink-500'} transition`;
+            }
+
+            // Auto Loop Logic
+            setLoop(beats) {
+                if (!this.audioBuffer) return;
+                const currentBpm = this.bpm * this.playbackRate;
+                const beatDuration = 60 / currentBpm;
+                const loopDuration = beatDuration * beats;
+
+                this.loopStart = this.getCurrentTime();
+                this.loopEnd = this.loopStart + loopDuration;
+                this.loopActive = true;
+                this.loopExitBtn.classList.remove('hidden');
+            }
+
+            clearLoop() {
+                this.loopActive = false;
+                this.loopExitBtn.classList.add('hidden');
+            }
+
+            drawWaveform() {
+                if (!this.audioBuffer) return;
+                const canvas = this.waveformCanvas;
+                const ctx2d = this.ctx2d;
+                const width = canvas.width = canvas.offsetWidth;
+                const height = canvas.height = canvas.offsetHeight;
+
+                ctx2d.clearRect(0, 0, width, height);
+
+                const data = this.audioBuffer.getChannelData(0);
+                const step = Math.ceil(data.length / width);
+                const amp = height / 2;
+
+                ctx2d.fillStyle = this.colorHex;
+                ctx2d.beginPath();
+
+                for (let i = 0; i < width; i++) {
+                    let min = 1.0;
+                    let max = -1.0;
+                    for (let j = 0; j < step; j++) {
+                        const datum = data[i * step + j];
+                        if (datum < min) min = datum;
+                        if (datum > max) max = datum;
+                    }
+                    ctx2d.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+                }
+            }
+
+            updateTimeDisplay() {
+                if (!this.audioBuffer) {
+                    this.timeDisplayEl.textContent = '00:00 / 00:00';
+                    return;
+                }
+                const current = this.getCurrentTime();
+                const curMin = Math.floor(current / 60).toString().padStart(2, '0');
+                const curSec = Math.floor(current % 60).toString().padStart(2, '0');
+                const durMin = Math.floor(this.audioBuffer.duration / 60).toString().padStart(2, '0');
+                const durSec = Math.floor(this.audioBuffer.duration % 60).toString().padStart(2, '0');
+                this.timeDisplayEl.textContent = `${curMin}:${curSec} / ${durMin}:${durSec}`;
+            }
+
+            updatePlayhead() {
+                if (!this.audioBuffer) return;
+                const current = this.getCurrentTime();
+
+                if (this.loopActive && current >= this.loopEnd) {
+                    this.seekTo(this.loopStart, true);
+                    return;
+                }
+
+                if (current >= this.audioBuffer.duration) {
+                    this.stop();
+                    return;
+                }
+
+                const progress = (current / this.audioBuffer.duration) * 100;
+                this.playheadEl.style.left = `${progress}%`;
+
+                this.updateTimeDisplay();
+
+                if (this.isPlaying && !this.isScratching) {
+                    this.jogAngle += 2 * this.playbackRate;
+                    this.jogMarkerEl.style.transform = `rotate(${this.jogAngle}deg)`;
+                }
+            }
+
+            animate() {
+                this.updatePlayhead();
+
+                if (this.analyserNode && this.meterFill) {
+                    const array = new Uint8Array(this.analyserNode.frequencyBinCount);
+                    this.analyserNode.getByteFrequencyData(array);
+                    let sum = 0;
+                    for (let i = 0; i < array.length; i++) sum += array[i];
+                    const average = sum / array.length;
+                    const percent = Math.min(100, Math.pow(average / 128, 1.5) * 100);
+                    this.meterFill.style.height = `${percent}%`;
+                }
+
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // Dynamic Audio Buffer Generator for Demo Tracks
+        function createSynthBeatTrack(ctx, bpm, style) {
+            const sampleRate = ctx.sampleRate;
+            const duration = 16 * (60 / bpm); // 4 bars loop
+            const numSamples = Math.floor(sampleRate * duration);
+            const buffer = ctx.createBuffer(2, numSamples, sampleRate);
+            const left = buffer.getChannelData(0);
+            const right = buffer.getChannelData(1);
+
+            const beatSec = 60 / bpm;
+
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+                const currentBeat = (t / beatSec) % 16;
+                let sample = 0;
+
+                // Kick Drum
+                if (currentBeat % 1 < 0.15) {
+                    const kickT = (currentBeat % 1) * beatSec;
+                    const freq = 120 * Math.exp(-kickT * 30);
+                    sample += Math.sin(2 * Math.PI * freq * kickT) * Math.exp(-kickT * 15) * 1.2;
+                }
+
+                // Snare / Clap
+                if ((Math.floor(currentBeat) % 2 === 1) && (currentBeat % 1 < 0.2)) {
+                    const snareT = (currentBeat % 1) * beatSec;
+                    const noise = (Math.random() * 2 - 1) * Math.exp(-snareT * 20);
+                    sample += noise * 0.6;
+                }
+
+                // Hi-Hat
+                if ((currentBeat * 2) % 1 < 0.1) {
+                    const hatT = ((currentBeat * 2) % 1) * beatSec;
+                    sample += (Math.random() * 2 - 1) * Math.exp(-hatT * 60) * 0.3;
+                }
+
+                // Bassline melody
+                if (style === 0) {
+                    const noteIndex = Math.floor(currentBeat * 2) % 8;
+                    const freqs = [55, 55, 65, 55, 49, 55, 73, 65];
+                    const bassT = (currentBeat * 2) % 1;
+                    const f = freqs[noteIndex];
+                    sample += Math.sin(2 * Math.PI * f * t) * Math.exp(-bassT * 3) * 0.4;
+                } else {
+                    const chordBeat = Math.floor(currentBeat);
+                    if (currentBeat % 1 < 0.3) {
+                        const chordT = currentBeat % 1;
+                        const root = chordBeat % 4 === 3 ? 174.61 : 130.81;
+                        sample += (Math.sin(2 * Math.PI * root * t) + Math.sin(2 * Math.PI * root * 1.25 * t)) * Math.exp(-chordT * 5) * 0.25;
+                    }
+                }
+
+                sample = Math.max(-0.9, Math.min(0.9, sample));
+                left[i] = sample;
+                right[i] = sample;
+            }
+
+            return buffer;
+        }
+
+        // Initialize Decks and Controllers
+        let deckA, deckB;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            deckA = new DJDeck('deckA', '#00f3ff', 'cyan');
+            deckB = new DJDeck('deckB', '#ff0055', 'pink');
+
+            // Global Drag & Drop Controller
+            let dragCounter = 0;
+            const globalOverlay = document.getElementById('global-drop-overlay');
+
+            window.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                dragCounter++;
+                if (dragCounter === 1) {
+                    globalOverlay.classList.remove('hidden');
+                    globalOverlay.classList.add('flex');
+                }
+            });
+
+            window.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dragCounter--;
+                if (dragCounter === 0) {
+                    globalOverlay.classList.add('hidden');
+                    globalOverlay.classList.remove('flex');
+                }
+            });
+
+            window.addEventListener('dragover', (e) => e.preventDefault());
+
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragCounter = 0;
+                globalOverlay.classList.add('hidden');
+                globalOverlay.classList.remove('flex');
+            });
+
+            // Drop Targets Setup
+            const setupDropTarget = (targetEl, onFiles) => {
+                targetEl.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    targetEl.classList.add('scale-105');
+                });
+                targetEl.addEventListener('dragleave', () => {
+                    targetEl.classList.remove('scale-105');
+                });
+                targetEl.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    targetEl.classList.remove('scale-105');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) onFiles(files);
+                });
+            };
+
+            setupDropTarget(document.getElementById('drop-target-deckA'), (files) => {
+                deckA.loadAudioFile(files[0]);
+            });
+
+            setupDropTarget(document.getElementById('drop-target-deckB'), (files) => {
+                deckB.loadAudioFile(files[0]);
+            });
+
+            setupDropTarget(document.getElementById('drop-target-library'), (files) => {
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const ctx = getAudioContext();
+                        ctx.decodeAudioData(e.target.result).then(buf => {
+                            addTrackToLibrary(buf, file.name, 'Drop Upload');
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            });
+
+            // File Inputs Handlers
+            const handleMultipleFileInput = (e) => {
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+                Array.from(files).forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        const ctx = getAudioContext();
+                        ctx.decodeAudioData(evt.target.result).then(buf => {
+                            addTrackToLibrary(buf, file.name, 'Local File');
+                            if (index === 0 && !deckA.audioBuffer) {
+                                deckA.loadBufferDirectly(buf, file.name);
+                            } else if (index === 1 && !deckB.audioBuffer) {
+                                deckB.loadBufferDirectly(buf, file.name);
+                            }
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            };
+
+            document.getElementById('global-file-input').addEventListener('change', handleMultipleFileInput);
+            document.getElementById('library-file-input').addEventListener('change', handleMultipleFileInput);
+
+            // URL Load Modal Setup
+            const urlModal = document.getElementById('url-modal');
+            document.getElementById('open-url-modal-btn').addEventListener('click', () => {
+                urlModal.classList.remove('hidden');
+            });
+            document.getElementById('close-url-modal').addEventListener('click', () => {
+                urlModal.classList.add('hidden');
+            });
+
+            const fetchAndDecodeUrl = async (url) => {
+                const ctx = getAudioContext();
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('HTTP Error ' + res.status);
+                const arrayBuf = await res.arrayBuffer();
+                return await ctx.decodeAudioData(arrayBuf);
+            };
+
+            const handleUrlLoad = async (target) => {
+                const urlInput = document.getElementById('audio-url-input');
+                const url = urlInput.value.trim();
+                if (!url) return;
+
+                try {
+                    const filename = url.split('/').pop().split('?')[0] || 'Web Audio';
+                    const buffer = await fetchAndDecodeUrl(url);
+                    if (target === 'deckA') deckA.loadBufferDirectly(buffer, filename);
+                    else if (target === 'deckB') deckB.loadBufferDirectly(buffer, filename);
+                    else if (target === 'lib') addTrackToLibrary(buffer, filename, 'URL');
+                    urlModal.classList.add('hidden');
+                    urlInput.value = '';
+                } catch (err) {
+                    alert('URLからの音声読み込みに失敗しました。URLやCORS制限をご確認ください。');
+                }
+            };
+
+            document.getElementById('load-url-deckA-btn').addEventListener('click', () => handleUrlLoad('deckA'));
+            document.getElementById('load-url-deckB-btn').addEventListener('click', () => handleUrlLoad('deckB'));
+            document.getElementById('load-url-lib-btn').addEventListener('click', () => handleUrlLoad('lib'));
+
+            // Mic Sampler Setup
+            const micModal = document.getElementById('mic-modal');
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let recordedBuffer = null;
+
+            document.getElementById('open-mic-modal-btn').addEventListener('click', () => {
+                micModal.classList.remove('hidden');
+            });
+            document.getElementById('close-mic-modal').addEventListener('click', () => {
+                micModal.classList.add('hidden');
+            });
+
+            const recordBtn = document.getElementById('record-btn');
+            const recTimer = document.getElementById('record-timer');
+            const recActions = document.getElementById('recorded-actions');
+            let recInterval = null;
+            let recStartTime = 0;
+
+            recordBtn.addEventListener('click', async () => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    clearInterval(recInterval);
+                    recordBtn.classList.remove('bg-red-600', 'animate-pulse');
+                    document.getElementById('mic-status-text').textContent = '録音完了！ロード先を選択してください';
+                } else {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+
+                        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+                        mediaRecorder.onstop = async () => {
+                            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                            const arrayBuf = await blob.arrayBuffer();
+                            const ctx = getAudioContext();
+                            recordedBuffer = await ctx.decodeAudioData(arrayBuf);
+                            recActions.classList.remove('hidden');
+                        };
+
+                        mediaRecorder.start();
+                        recStartTime = Date.now();
+                        recTimer.classList.remove('hidden');
+                        recActions.classList.add('hidden');
+                        recordBtn.classList.add('bg-red-600', 'animate-pulse');
+                        document.getElementById('mic-status-text').textContent = '録音中... もう一度押して停止';
+
+                        recInterval = setInterval(() => {
+                            const diff = (Date.now() - recStartTime) / 1000;
+                            recTimer.textContent = `00:${diff.toFixed(1).padStart(4, '0')}`;
+                        }, 100);
+                    } catch (err) {
+                        document.getElementById('mic-status-text').textContent = 'マイクアクセスが拒否されました';
+                    }
+                }
+            });
+
+            document.getElementById('load-rec-deckA-btn').addEventListener('click', () => {
+                if (recordedBuffer) {
+                    const name = 'Mic_Sample_' + new Date().toLocaleTimeString() + '.wav';
+                    deckA.loadBufferDirectly(recordedBuffer, name);
+                    addTrackToLibrary(recordedBuffer, name, 'Microphone');
+                    micModal.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('load-rec-deckB-btn').addEventListener('click', () => {
+                if (recordedBuffer) {
+                    const name = 'Mic_Sample_' + new Date().toLocaleTimeString() + '.wav';
+                    deckB.loadBufferDirectly(recordedBuffer, name);
+                    addTrackToLibrary(recordedBuffer, name, 'Microphone');
+                    micModal.classList.add('hidden');
+                }
+            });
+
+            // Sync Buttons Logic
+            document.getElementById('deckA-sync-btn').addEventListener('click', () => {
+                if (deckB.audioBuffer) {
+                    deckA.pitchPercent = deckB.pitchPercent;
+                    deckA.pitchSlider.value = deckB.pitchPercent;
+                    deckA.pitchValEl.textContent = `${deckA.pitchPercent >= 0 ? '+' : ''}${deckA.pitchPercent.toFixed(1)}%`;
+                    deckA.updatePlaybackRate();
+                }
+            });
+
+            document.getElementById('deckB-sync-btn').addEventListener('click', () => {
+                if (deckA.audioBuffer) {
+                    deckB.pitchPercent = deckA.pitchPercent;
+                    deckB.pitchSlider.value = deckA.pitchPercent;
+                    deckB.pitchValEl.textContent = `${deckB.pitchPercent >= 0 ? '+' : ''}${deckB.pitchPercent.toFixed(1)}%`;
+                    deckB.updatePlaybackRate();
+                }
+            });
+
+            // Master Crossfader
+            const crossfader = document.getElementById('crossfader');
+            crossfader.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                const gainA = Math.cos((val + 1) * 0.25 * Math.PI);
+                const gainB = Math.sin((val + 1) * 0.25 * Math.PI);
+
+                deckA.crossfaderGainNode.gain.value = gainA;
+                deckB.crossfaderGainNode.gain.value = gainB;
+            });
+
+            // Master Volume
+            document.getElementById('master-volume').addEventListener('input', (e) => {
+                if (masterGainNode) {
+                    masterGainNode.gain.value = parseFloat(e.target.value);
+                }
+            });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    deckA.togglePlay();
+                } else if (e.code === 'KeyC') {
+                    deckA.handleCue();
+                } else if (e.code === 'Enter') {
+                    e.preventDefault();
+                    deckB.togglePlay();
+                } else if (e.code === 'KeyV') {
+                    deckB.handleCue();
+                }
+            });
+
+            // Load Synthesized Demo Tracks Feature
+            document.getElementById('load-demo-btn').addEventListener('click', () => {
+                const ctx = getAudioContext();
+
+                const bufferA = createSynthBeatTrack(ctx, 124, 0);
+                deckA.loadBufferDirectly(bufferA, 'DEMO_Electro_Beat_124BPM.wav', 124);
+                addTrackToLibrary(bufferA, 'DEMO_Electro_Beat_124BPM.wav', 'Synth Demo');
+
+                const bufferB = createSynthBeatTrack(ctx, 128, 1);
+                deckB.loadBufferDirectly(bufferB, 'DEMO_House_Groove_128BPM.wav', 128);
+                addTrackToLibrary(bufferB, 'DEMO_House_Groove_128BPM.wav', 'Synth Demo');
+            });
+        });
+    </script>
+</body>
+</html>
